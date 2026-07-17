@@ -5,6 +5,12 @@
 # ///
 # DBTITLE 1,Customer Support AI Agent - Overview
 # MAGIC %md
+# MAGIC > ⚠️ **2026年7月現在の推奨経路について**
+# MAGIC > 本記事は ResponsesAgent を Unity Catalog へ登録し **Model Serving** へデプロイする方式を扱います。
+# MAGIC > Databricks は 2026年7月以降、新規エージェント開発には **Databricks Apps ベースの Custom Agent** を推奨しています（[公式ドキュメント](https://docs.databricks.com/aws/en/generative-ai/agent-framework/deploy-agent)）。
+# MAGIC > Model Serving 方式は、従来方式の仕組みを短距離で理解する教材、既存環境、または Apps を利用できない環境向けの選択肢として理解してください。
+# MAGIC > このノートブックが扱うのは、AgentOps 全体のうち主に **Tracing、パッケージング、登録、デプロイ、手動レビュー** です。評価データセット、品質ゲート、Production Monitoring は別途実装が必要です。
+# MAGIC
 # MAGIC # 🤖 カスタマーサポート AI エージェント on Databricks
 # MAGIC
 # MAGIC このノートブックでは、以下の構成でカスタマーサポートAIエージェントを構築・デプロイします。
@@ -242,7 +248,10 @@ sys.path.insert(0, "/tmp")
 from agent import AGENT
 from mlflow.types.responses import ResponsesAgentRequest
 
-def test_agent(question: str):
+def demo_agent(question: str):
+    """動作確認用デモ関数。期待ツールや引数の自動検証はしない。
+    本番テストでは expected_tool_calls / expected_facts を検証するアサーションを別途追加すること。
+    """
     request = ResponsesAgentRequest(
         input=[{"role": "user", "content": question}]
     )
@@ -259,14 +268,15 @@ def test_agent(question: str):
                 print(f"A: {content}")
     print("-" * 60)
 
+# ※ 顧客名は合成ID (TEST-USER-001) を使用。実名をTraceへ残さないこと (PII対策)
 # テストケース 1: 注文状況確認
-test_agent("注文ORD-001の配送状況を教えてください")
+demo_agent("注文ORD-001の配送状況を教えてください")
 
 # テストケース 2: FAQ検索
-test_agent("返品ポリシーを教えてください")
+demo_agent("返品ポリシーを教えてください")
 
 # テストケース 3: チケット作成
-test_agent("届いた商品が壊れていました。乱橋太郎としてサポートチケットを作成してください")
+demo_agent("届いた商品が壊れていました。TEST-USER-001としてサポートチケットを作成してください")
 
 # COMMAND ----------
 
@@ -364,10 +374,12 @@ def wait_for_endpoint(name: str, timeout_min: int = 20):
             print(f"\n✓ エンドポイントが準備完了しました: {name}")
             return True
         time.sleep(30)
-    print("タイムアウト: 後で再度確認してください")
-    return False
+    raise TimeoutError(
+        f"エンドポイント '{name}' が {timeout_min} 分以内に READY になりませんでした。"
+        "次のセルへ進む前に状態を確認してください。"
+    )
 
-wait_for_endpoint(AGENT_ENDPOINT_NAME)
+wait_for_endpoint(AGENT_ENDPOINT_NAME)  # タイムアウト時は例外で停止
 
 # COMMAND ----------
 
@@ -395,7 +407,7 @@ def chat(question: str):
 # 実際の問い合わせ
 chat("注文ORD-003はいつ届きますか？")
 chat("返品ポリシーを教えてください")
-chat("商品が壊れていた。田中花子としてチケットを作ってほしい")
+chat("商品が壊れていた。TEST-USER-001としてチケットを作ってほしい")  # PII対策: 実名不使用
 
 # COMMAND ----------
 
